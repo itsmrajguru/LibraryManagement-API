@@ -39,3 +39,8 @@ bld/
 *.sqlite
 *.db
 *.db-journal
+bin/
+obj/
+.vs/
+*.user
+*.suo

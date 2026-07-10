@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using LibraryManagementAPI.DTOs;
 using LibraryManagementAPI.Services;
@@ -8,6 +9,7 @@ namespace LibraryManagementAPI.Controllers
     // No business logic here. Think of it as a waiter, not the chef.
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class BookController : ControllerBase
     {
         private readonly IBookService _bookService;
@@ -18,26 +20,15 @@ namespace LibraryManagementAPI.Controllers
             _bookService = bookService;
         }
 
-
         [HttpGet]                      // GET /api/book
+        [AllowAnonymous]
         public IActionResult GetAllBooks()
         {
             return Ok(_bookService.GetAllBooks());
         }
 
-        [HttpGet("available")]         // GET /api/book/available
-        public IActionResult GetAvailableBooks()
-        {
-            return Ok(_bookService.GetAvailableBooks());
-        }
-
-        [HttpGet("issued")]            // GET /api/book/issued
-        public IActionResult GetIssuedBooks()
-        {
-            return Ok(_bookService.GetIssuedBooks());
-        }
-
-        [HttpGet("{id}")]              // GET /api/book/1
+        [HttpGet("{id}")]                 // GET /api/book/1
+        [AllowAnonymous]
         public IActionResult GetBookById(int id)
         {
             var book = _bookService.GetBookById(id);
@@ -45,61 +36,39 @@ namespace LibraryManagementAPI.Controllers
             return Ok(book);
         }
 
-
-        // POST /api/book 
-        [HttpPost]
-        public IActionResult AddBook([FromBody] BookRequestDto bookDto)
+        [HttpGet("{id}/availability")]    // GET /api/book/1/availability
+        [AllowAnonymous]
+        public IActionResult GetAvailability(int id)
         {
-            var newBook = _bookService.AddBook(bookDto);
-            return CreatedAtAction(nameof(GetBookById), new { id = newBook.Id }, newBook); // 201 Created
+            return Ok(_bookService.GetAvailability(id));
         }
 
-        // PUT /api/book/1
-        [HttpPut("{id}")]
-        public IActionResult UpdateBook(int id, [FromBody] BookRequestDto bookDto)
+        [HttpPost]                        // POST /api/book — Admin/Librarian only
+        [Authorize(Roles = "Admin,Librarian")]
+        public IActionResult AddBook([FromBody] CreateBookDto dto)
         {
-            var updatedBook = _bookService.UpdateBook(id, bookDto);
+            var newBook = _bookService.AddBook(dto);
+            return CreatedAtAction(nameof(GetBookById), new { id = newBook.Id }, newBook);
+        }
+
+        [HttpPut("{id}")]                 // PUT /api/book/1 — Admin/Librarian only
+        [Authorize(Roles = "Admin,Librarian")]
+        public IActionResult UpdateBook(int id, [FromBody] UpdateBookDto dto)
+        {
+            var updatedBook = _bookService.UpdateBook(id, dto);
             if (updatedBook == null) return NotFound(new { message = $"Book with ID {id} not found!" });
             return Ok(new { message = "Book updated successfully!", book = updatedBook });
         }
 
-        // DELETE /api/book/1
-        [HttpDelete("{id}")]
+        [HttpDelete("{id}")]              // DELETE /api/book/1 — Admin only
+        [Authorize(Roles = "Admin")]
         public IActionResult DeleteBook(int id)
         {
             var book = _bookService.GetBookById(id);
             if (book == null) return NotFound(new { message = $"Book with ID {id} not found!" });
-            if (book.IsIssued) return BadRequest(new { message = $"Cannot delete! Book is issued to {book.IssuedTo}." });
 
             _bookService.DeleteBook(id);
-            return NoContent(); // 204 — standard response for DELETE
-        }
-
-
-        // POST /api/book/1/issue?studentName=Mangesh
-        [HttpPost("{id}/issue")]
-        public IActionResult IssueBook(int id, [FromQuery] string studentName)
-        {
-            var (success, message, book) = _bookService.IssueBook(id, studentName);
-            if (!success)
-            {
-                if (message.Contains("not found")) return NotFound(new { message });
-                return BadRequest(new { message });
-            }
-            return Ok(new { message, book });
-        }
-
-        // POST /api/book/1/return
-        [HttpPost("{id}/return")]
-        public IActionResult ReturnBook(int id)
-        {
-            var (success, message, book) = _bookService.ReturnBook(id);
-            if (!success)
-            {
-                if (message.Contains("not found")) return NotFound(new { message });
-                return BadRequest(new { message });
-            }
-            return Ok(new { message, book });
+            return NoContent();
         }
     }
 }

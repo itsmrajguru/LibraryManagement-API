@@ -1,6 +1,7 @@
+using LibraryManagementAPI.Data;
 using LibraryManagementAPI.DTOs;
 using LibraryManagementAPI.Models;
-using LibraryManagementAPI.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagementAPI.Services
 {
@@ -9,84 +10,121 @@ namespace LibraryManagementAPI.Services
     public class DatabaseBookService : IBookService
     {
         private readonly LibraryDbContext _context;
+        private readonly ILogger<DatabaseBookService> _logger;
 
         // Inject the DbContext
-        public DatabaseBookService(LibraryDbContext context)
+        public DatabaseBookService(LibraryDbContext context, ILogger<DatabaseBookService> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
-        public List<Book> GetAllBooks() => _context.Books.ToList();
-
-        public Book? GetBookById(int id) => _context.Books.Find(id);
-
-        public List<Book> GetAvailableBooks() => _context.Books.Where(b => !b.IsIssued).ToList();
-
-        public List<Book> GetIssuedBooks() => _context.Books.Where(b => b.IsIssued).ToList();
-
-        public Book AddBook(BookRequestDto bookDto)
+        // Get all books from the database
+        public List<BookDto> GetAllBooks()
         {
-            var newBook = new Book
-            {
-                Title = bookDto.Title,
-                Author = bookDto.Author
-            };
-            
-            // Add to database and save
-            _context.Books.Add(newBook);
-            _context.SaveChanges();
-            
-            return newBook; // EF Core automatically populates the auto-incremented Id
+            return _context.Books
+                .Include(b => b.Author)
+                .Include(b => b.Category)
+                .Select(b => MapToDto(b))
+                .ToList();
         }
 
-        public Book? UpdateBook(int id, BookRequestDto bookDto)
+        public BookDto? GetBookById(int id)
+        {
+            var book = _context.Books
+                .Include(b => b.Author)
+                .Include(b => b.Category)
+                .FirstOrDefault(b => b.Id == id);
+
+            return book == null ? null : MapToDto(book);
+        }
+
+        public BookDto AddBook(CreateBookDto dto)
+        {
+            // Find author by name or create a new one
+            var author = _context.Authors.FirstOrDefault(a => a.Name == dto.AuthorName);
+            if (author == null)
+            {
+                author = new Author { Name = dto.AuthorName, Bio = "Auto-created author" };
+                _context.Authors.Add(author);
+                _context.SaveChanges();
+            }
+
+            var book = new Book
+            {
+                Title = dto.Title,
+                TotalCopies = dto.TotalCopies,
+                AvailableCopies = dto.TotalCopies,
+                AuthorId = author.Id,
+                CategoryId = dto.CategoryId
+            };
+
+            _context.Books.Add(book);
+            _context.SaveChanges();
+            _logger.LogInformation("Book added: {Title}", book.Title);
+
+            // Reload with navigation properties to return full DTO
+            return GetBookById(book.Id)!;
+        }
+
+        public BookDto? UpdateBook(int id, UpdateBookDto dto)
         {
             var book = _context.Books.Find(id);
             if (book == null) return null;
 
-            book.Title = bookDto.Title;
-            book.Author = bookDto.Author;
-            
+            var author = _context.Authors.FirstOrDefault(a => a.Name == dto.AuthorName);
+            if (author == null)
+            {
+                author = new Author { Name = dto.AuthorName, Bio = "Auto-created author" };
+                _context.Authors.Add(author);
+                _context.SaveChanges();
+            }
+
+            book.Title = dto.Title;
+            book.TotalCopies = dto.TotalCopies;
+            book.AuthorId = author.Id;
+            book.CategoryId = dto.CategoryId;
+
             _context.SaveChanges();
-            return book;
+            return GetBookById(id);
         }
 
         public bool DeleteBook(int id)
         {
             var book = _context.Books.Find(id);
-            if (book == null || book.IsIssued) return false;
+            if (book == null) return false;
 
             _context.Books.Remove(book);
             _context.SaveChanges();
+            _logger.LogInformation("Book deleted: ID {Id}", id);
             return true;
         }
 
-        public (bool success, string message, Book? book) IssueBook(int id, string studentName)
+        // Check how many copies are available vs total
+        public object GetAvailability(int id)
         {
             var book = _context.Books.Find(id);
-            if (book == null) return (false, "Book not found!", null);
-            if (book.IsIssued) return (false, $"Book already issued to {book.IssuedTo}!", null);
+            if (book == null) return new { message = "Book not found!" };
 
-            book.IsIssued = true;
-            book.IssuedTo = studentName;
-            book.IssuedOn = DateTime.Now;
-            
-            _context.SaveChanges();
-            return (true, $"Book issued to {studentName}!", book);
+            return new
+            {
+                bookId = book.Id,
+                title = book.Title,
+                totalCopies = book.TotalCopies,
+                availableCopies = book.AvailableCopies,
+                isAvailable = book.AvailableCopies > 0
+            };
         }
 
-        public (bool success, string message, Book? book) ReturnBook(int id)
+        // Map Book entity to BookDto
+        private static BookDto MapToDto(Book b) => new()
         {
-            var book = _context.Books.Find(id);
-            if (book == null) return (false, "Book not found!", null);
-            if (!book.IsIssued) return (false, "Book was not issued, can't return!", null);
-
-            book.IsIssued = false;
-            book.IssuedTo = "";
-            book.IssuedOn = null;
-            
-            _context.SaveChanges();
-            return (true, "Book returned successfully!", book);
-        }
+            Id = b.Id,
+            Title = b.Title,
+            TotalCopies = b.TotalCopies,
+            AvailableCopies = b.AvailableCopies,
+            AuthorName = b.Author?.Name ?? "",
+            CategoryName = b.Category?.Name ?? ""
+        };
     }
 }

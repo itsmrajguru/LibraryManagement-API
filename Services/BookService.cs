@@ -1,79 +1,51 @@
 using LibraryManagementAPI.DTOs;
-using LibraryManagementAPI.Models;
 
 namespace LibraryManagementAPI.Services
 {
-    // Service Layer: Contains all business logic.
-    // Controller just calls these methods.it doesn't think, it just delegates.
+    // In-memory fake service — kept for reference only, DatabaseBookService is used in production.
+    // This class is NOT registered in DI — it's just here so the project remembers how we started.
     public class BookService : IBookService
     {
-        private static List<Book> _books = new List<Book>
+        private static readonly List<(int Id, string Title, string AuthorName, int CategoryId, int Total, int Available)> _books = new();
+
+        public List<BookDto> GetAllBooks()
+            => _books
+                .Select(b => new BookDto { Id = b.Id, Title = b.Title, AuthorName = b.AuthorName, TotalCopies = b.Total, AvailableCopies = b.Available })
+                .ToList();
+
+        public BookDto? GetBookById(int id)
         {
-            new Book { Id = 1, Title = "Clean Code", Author = "Robert Martin" },
-            new Book { Id = 2, Title = "Annihilation of Caste", Author = "B.R. Ambedkar" }
-        };
-
-        public List<Book> GetAllBooks() => _books;
-
-        public Book? GetBookById(int id) => _books.FirstOrDefault(b => b.Id == id);
-
-        public List<Book> GetAvailableBooks() => _books.Where(b => !b.IsIssued).ToList();
-
-        public List<Book> GetIssuedBooks() => _books.Where(b => b.IsIssued).ToList();
-
-        public Book AddBook(BookRequestDto bookDto)
-        {
-            var newBook = new Book
-            {
-                Id = _books.Count > 0 ? _books.Max(b => b.Id) + 1 : 1,
-                Title = bookDto.Title,
-                Author = bookDto.Author
-            };
-            _books.Add(newBook);
-            return newBook;
+            var b = _books.FirstOrDefault(x => x.Id == id);
+            return b == default ? null : new BookDto { Id = b.Id, Title = b.Title, AuthorName = b.AuthorName };
         }
 
-        public Book? UpdateBook(int id, BookRequestDto bookDto)
+        public BookDto AddBook(CreateBookDto dto)
         {
-            var book = _books.FirstOrDefault(b => b.Id == id);
-            if (book == null) return null;
+            var id = _books.Count > 0 ? _books.Max(b => b.Id) + 1 : 1;
+            _books.Add((id, dto.Title, dto.AuthorName, dto.CategoryId, dto.TotalCopies, dto.TotalCopies));
+            return new BookDto { Id = id, Title = dto.Title, AuthorName = dto.AuthorName };
+        }
 
-            book.Title = bookDto.Title;
-            book.Author = bookDto.Author;
-            return book;
+        public BookDto? UpdateBook(int id, UpdateBookDto dto)
+        {
+            var idx = _books.FindIndex(b => b.Id == id);
+            if (idx < 0) return null;
+            _books[idx] = (id, dto.Title, dto.AuthorName, dto.CategoryId, dto.TotalCopies, _books[idx].Available);
+            return new BookDto { Id = id, Title = dto.Title };
         }
 
         public bool DeleteBook(int id)
         {
-            var book = _books.FirstOrDefault(b => b.Id == id);
-            if (book == null || book.IsIssued) return false;
-
-            _books.Remove(book);
+            var b = _books.FirstOrDefault(x => x.Id == id);
+            if (b == default) return false;
+            _books.Remove(b);
             return true;
         }
 
-        public (bool success, string message, Book? book) IssueBook(int id, string studentName)
+        public object GetAvailability(int id)
         {
-            var book = _books.FirstOrDefault(b => b.Id == id);
-            if (book == null) return (false, "Book not found!", null);
-            if (book.IsIssued) return (false, $"Book already issued to {book.IssuedTo}!", null);
-
-            book.IsIssued = true;
-            book.IssuedTo = studentName;
-            book.IssuedOn = DateTime.Now; // record the exact issue date & time
-            return (true, $"Book issued to {studentName}!", book);
-        }
-
-        public (bool success, string message, Book? book) ReturnBook(int id)
-        {
-            var book = _books.FirstOrDefault(b => b.Id == id);
-            if (book == null) return (false, "Book not found!", null);
-            if (!book.IsIssued) return (false, "Book was not issued, can't return!", null);
-
-            book.IsIssued = false;
-            book.IssuedTo = "";
-            book.IssuedOn = null; // reset date on return
-            return (true, "Book returned successfully!", book);
+            var b = _books.FirstOrDefault(x => x.Id == id);
+            return b == default ? new { message = "Not found" } : new { bookId = b.Id, availableCopies = b.Available };
         }
     }
 }
