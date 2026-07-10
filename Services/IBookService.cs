@@ -3,9 +3,6 @@ using LibraryManagementAPI.Models;
 
 namespace LibraryManagementAPI.Services
 {
-    // Interface = Contract. Defines WHAT methods must exist, not HOW they work.
-    // Any class implementing this MUST provide all these methods.
-
     /*Interface is nothing a fixed logic class
     that is called by diffrent services
     so that diffrent services like fakeDB or database

@@ -45,10 +45,8 @@ namespace LibraryManagementAPI.Controllers
             return Ok(book);
         }
 
-        // ── CRUD Endpoints ─────────────────────────────────────────
 
-        // POST /api/book  |  Body: { "title": "...", "author": "..." }
-        // [ApiController] auto-validates DTO — sends 400 if [Required] fields are missing
+        // POST /api/book 
         [HttpPost]
         public IActionResult AddBook([FromBody] BookRequestDto bookDto)
         {
@@ -56,7 +54,7 @@ namespace LibraryManagementAPI.Controllers
             return CreatedAtAction(nameof(GetBookById), new { id = newBook.Id }, newBook); // 201 Created
         }
 
-        // PUT /api/book/1  |  Body: { "title": "...", "author": "..." }
+        // PUT /api/book/1
         [HttpPut("{id}")]
         public IActionResult UpdateBook(int id, [FromBody] BookRequestDto bookDto)
         {
@@ -77,7 +75,6 @@ namespace LibraryManagementAPI.Controllers
             return NoContent(); // 204 — standard response for DELETE
         }
 
-        // ── Business Logic Endpoints ───────────────────────────────
 
         // POST /api/book/1/issue?studentName=Mangesh
         [HttpPost("{id}/issue")]

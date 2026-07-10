@@ -4,10 +4,9 @@ using LibraryManagementAPI.Models;
 namespace LibraryManagementAPI.Services
 {
     // Service Layer: Contains all business logic.
-    // Controller just calls these methods — it doesn't think, it just delegates.
+    // Controller just calls these methods.it doesn't think, it just delegates.
     public class BookService : IBookService
     {
-        // In-memory "fake DB". static = shared across all requests so data persists.
         private static List<Book> _books = new List<Book>
         {
             new Book { Id = 1, Title = "Clean Code", Author = "Robert Martin" },
@@ -18,7 +17,6 @@ namespace LibraryManagementAPI.Services
 
         public Book? GetBookById(int id) => _books.FirstOrDefault(b => b.Id == id);
 
-        // LINQ Where() filters the list; ToList() converts result back to List<Book>
         public List<Book> GetAvailableBooks() => _books.Where(b => !b.IsIssued).ToList();
 
         public List<Book> GetIssuedBooks() => _books.Where(b => b.IsIssued).ToList();
@@ -54,7 +52,6 @@ namespace LibraryManagementAPI.Services
             return true;
         }
 
-        // Returns a Tuple: (success flag, message, book object)
         public (bool success, string message, Book? book) IssueBook(int id, string studentName)
         {
             var book = _books.FirstOrDefault(b => b.Id == id);
